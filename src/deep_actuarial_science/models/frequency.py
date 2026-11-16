@@ -261,11 +261,13 @@ class GLM(FrequencyModel):
     def _fit(self, learn, params, base):
         d = add_glm_features(learn)
         self.formula = params["formula"]
-        self.result = _without_data(
-            smf_glm(
-                self.formula, data=d, offset=np.log(d.Exposure), family=sm.families.Poisson()
-            ).fit()
-        )
+        result = smf_glm(
+            self.formula, data=d, offset=np.log(d.Exposure), family=sm.families.Poisson()
+        ).fit()
+        # estimate, standard error, z, p-value and 95% interval of every coefficient: taken
+        # now, because statsmodels cannot summarise a fit once its data is dropped
+        self.coefficients = result.summary2().tables[1]
+        self.result = _without_data(result)
 
     def predict(self, df):
         d = add_glm_features(df)

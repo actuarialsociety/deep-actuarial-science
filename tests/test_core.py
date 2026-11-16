@@ -608,31 +608,15 @@ def test_fnn_follows_the_benchmark_papers_code():
 
 
 def test_saved_glm_carries_no_training_data():
-    """A fitted GLM is pickled by every run (and inside the CANN): it must stay small and
-    predict the same after a round trip."""
+    """A fitted GLM is pickled by every run (and inside the CANN): it must stay small, predict
+    the same after a round trip, and still show its coefficient table (the notebook)."""
     import pickle
 
-    rng = np.random.default_rng(1)
-    n = 3000
-    df = pd.DataFrame(
-        {
-            "ClaimNb": rng.poisson(0.1, n),
-            "Exposure": rng.uniform(0.1, 1, n),
-            "DrivAge": rng.integers(18, 90, n),
-            "VehGas": rng.choice(["Diesel", "Regular"], n),
-        }
-    )
-    glm = fm.GLM()
-    glm.result = fm._without_data(
-        fm.smf_glm(
-            "ClaimNb ~ VehGas + np.log(DrivAge)",
-            data=df,
-            offset=np.log(df.Exposure),
-            family=fm.sm.families.Poisson(),
-        ).fit()
-    )
-    blob = pickle.dumps(glm.result)
-    assert len(blob) < 50_000
+    df = _synthetic_policies()
+    glm = fm.GLM().fit(df, {"formula": "ClaimNb ~ BonusMalusGLM + VehGas + VehBrand"})
+    blob = pickle.dumps(glm)
+    assert len(blob) < 100_000
     again = pickle.loads(blob)
-    np.testing.assert_allclose(again.predict(df.head(20)), glm.result.predict(df.head(20)))
-    assert len(again.params) == 3
+    np.testing.assert_allclose(again.predict(df), glm.predict(df))
+    assert list(again.coefficients.index) == list(glm.result.params.index)
+    assert {"Coef.", "Std.Err.", "P>|z|"} <= set(again.coefficients.columns)

@@ -42,7 +42,7 @@ Rules (enforced for pull requests by CI, see [MAINTENANCE.md](./MAINTENANCE.md))
 
 ### Changed
 - Version 0.3.0.
-- Saved GLMs no longer carry their training data: 840 MB → about 50 kB per model (and the CANN that holds its GLM), so a run no longer adds 2.5 GB to `mlruns/`.
+- Saved GLMs no longer carry their training data: 840 MB → about 50 kB per model (and the CANN that holds its GLM), so a run no longer adds 2.5 GB to `mlruns/`. The coefficient table is kept as `glm.coefficients` (the notebook shows it).
 - Lesson and README gap markers work in either order (`gap.fnn.cann` or `gap.cann.fnn`), so two near-equal models swapping places does not break the freeze.
 - Lesson scripts and the slide build read only the numbered decks (`lessons/NN *.md`), so `lessons/README.md` is not published as a lesson.
 - Git flow: feature branches off `develop` with conventional branch names and commits; CI also runs on pushes to `develop`. AGENTS.md §7 records the maintainer's working principles.
