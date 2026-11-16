@@ -552,3 +552,87 @@ def test_docs_match_the_frozen_reference_run():
     bd = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(bd)
     assert bd.main(check=True) == 0, "run python3 scripts/build_docs.py"
+
+
+def test_paper_checklist_agrees_with_the_code_and_parameters():
+    """docs/paper_checklist.yml: every parameter it quotes has that value in conf/base, every
+    symbol it points to exists, every deviation states its reason; the Markdown page is current."""
+    from pathlib import Path
+
+    from deep_actuarial_science import checklist
+
+    assert checklist.problems() == []
+    page = Path(__file__).resolve().parents[1] / "docs" / "paper_checklist.md"
+    assert page.read_text() == checklist.markdown(), "run python3 scripts/build_docs.py"
+
+
+def test_fnn_follows_the_benchmark_papers_code():
+    """Brauer (2024), public code: the seven numeric inputs are standardised as recorded (no
+    caps, no log-density), the embeddings start at Normal(1, 0.05), and FNN_EMB has the 792
+    weights of the paper's Table 1 (11 brands, 22 regions)."""
+    import torch
+
+    from deep_actuarial_science.models.frequency import NUMERIC, EmbeddingFNN, nn_preprocessor
+    from deep_actuarial_science.models.torch_utils import n_params
+
+    rng = np.random.default_rng(0)
+    n = 400
+    df = pd.DataFrame(
+        {
+            "VehAge": rng.integers(0, 60, n),
+            "DrivAge": rng.integers(18, 100, n),
+            "BonusMalus": rng.integers(50, 230, n),
+            "VehPower": rng.integers(4, 16, n),
+            "Area": rng.choice(list("ABCDEF"), n),
+            "Density": rng.integers(1, 27000, n),
+            "VehGas": rng.choice(["Diesel", "Regular"], n),
+            "VehBrand": rng.choice(["B1", "B2"], n),
+            "Region": rng.choice(["R11", "R24"], n),
+        }
+    )
+    raw = nn_preprocessor("raw").fit_transform(df)[:, :7]
+    np.testing.assert_allclose(raw.mean(0), 0, atol=1e-6)  # VehGas is float32
+    np.testing.assert_allclose(raw.std(0), 1, atol=1e-6)
+    # raw: a linear map of the recorded values, so Density is not logged and nothing is capped
+    z = (df.Density - df.Density.mean()) / df.Density.std(ddof=0)
+    assert any(np.allclose(raw[:, j], z) for j in range(7))
+    capped = nn_preprocessor("capped").fit_transform(df)[:, :7]
+    assert not any(np.allclose(capped[:, j], z) for j in range(7))
+    with pytest.raises(ValueError):
+        nn_preprocessor("other")
+
+    net = EmbeddingFNN(len(NUMERIC) + 3, [11, 22], [2, 2], [20, 15, 10], 0.0, [1.0, 0.05])
+    assert n_params(net) == 792
+    emb = torch.cat([e.weight.flatten() for e in net.emb])
+    assert abs(emb.mean().item() - 1.0) < 0.03 and 0.02 < emb.std().item() < 0.08
+
+
+def test_saved_glm_carries_no_training_data():
+    """A fitted GLM is pickled by every run (and inside the CANN): it must stay small and
+    predict the same after a round trip."""
+    import pickle
+
+    rng = np.random.default_rng(1)
+    n = 3000
+    df = pd.DataFrame(
+        {
+            "ClaimNb": rng.poisson(0.1, n),
+            "Exposure": rng.uniform(0.1, 1, n),
+            "DrivAge": rng.integers(18, 90, n),
+            "VehGas": rng.choice(["Diesel", "Regular"], n),
+        }
+    )
+    glm = fm.GLM()
+    glm.result = fm._without_data(
+        fm.smf_glm(
+            "ClaimNb ~ VehGas + np.log(DrivAge)",
+            data=df,
+            offset=np.log(df.Exposure),
+            family=fm.sm.families.Poisson(),
+        ).fit()
+    )
+    blob = pickle.dumps(glm.result)
+    assert len(blob) < 50_000
+    again = pickle.loads(blob)
+    np.testing.assert_allclose(again.predict(df.head(20)), glm.result.predict(df.head(20)))
+    assert len(again.params) == 3

@@ -149,7 +149,9 @@ def frequency_analysis(base: dict) -> Path:
                 "policy_cv_p99": float(spread.quantile(0.99)),
             }
         )
-        expected = (published.get(m) or {}).get("expected", {})
+        entries = published.get(m) or {}  # one entry, or a list (loss table, fit table)
+        entries = entries if isinstance(entries, list) else [entries]
+        expected = {k: v for e in entries for k, v in e.get("expected", {}).items()}
         strips.append(
             {
                 "model": m,

@@ -77,7 +77,13 @@ cann:
 paper's text from the local library (`python scripts/research.py fetch` and `index`, then
 `data/12_research/text/<key>.txt`; markitdown is not needed), extract its algorithms, equations,
 architecture and hyperparameters, and write paper-to-code's implementation checklist, with
-section and equation for every item, into the PR description. Use its code and test patterns
+section and equation for every item, as the model's block in `docs/paper_checklist.yml`
+(`param` for a setting in `conf/base`, `code` for a symbol; status `match`, `deviation` with its
+reason, or `open` where the source is silent). `pytest` checks it against the code and
+`scripts/build_docs.py` publishes it. **Read the paper's public code too, when it has any**
+(`gh api repos/<owner>/<repo>/contents/<file>`): preprocessing and initialisers are often only
+there. For Brauer (2024), the raw standardised features and the Normal(1, 0.05) embedding start
+appear in the notebook, not in the paper. Use its code and test patterns
 (Phases 3-4: math in docstrings, shape and gradient tests, device-agnostic code). **Do not**
 follow its project scaffolding (Phases 2, 5, 6: a new uv project, Gradio demo, config presets,
 packaging): models live in the Kedro pipelines below. Where the paper leaves a detail out, do

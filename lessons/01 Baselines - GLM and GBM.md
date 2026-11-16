@@ -131,7 +131,7 @@ Poisson deviance per policy, $\times 10^{-2}$.
 
 Brauer [[5](https://doi.org/10.1007/s13385-024-00388-2)], Table 2 (b)–(d), reproduces the same GLM numbers in Python.
 
-GLM1 → GLM3: <!--r:gap.glm.glm3-->0.044 (0.019 to 0.069)<!--/r-->, <!--r:verdict.glm.glm3-->real<!--/r-->. The GBM beats every network of lessons 02–04, even the CANN averaged over 15 seeds, by <!--r:gap.cann_x15.gbm-->0.240 (0.169 to 0.311)<!--/r--> (gap in test deviance, 95% interval over test policies: lesson 00, Core ideas ⑥).
+GLM1 → GLM3: <!--r:gap.glm.glm3-->0.044 (0.019 to 0.069)<!--/r-->, <!--r:verdict.glm.glm3-->real<!--/r-->. The GBM beats every network of lessons 02–04, even the CANN averaged over 15 seeds, by <!--r:gap.cann_x15.gbm-->0.249 (0.179 to 0.319)<!--/r--> (gap in test deviance, 95% interval over test policies: lesson 00, Core ideas ⑥).
 
 ---
 

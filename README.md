@@ -6,14 +6,14 @@
 
 ## Findings
 
-<!--r:count.PASS-->23<!--/r--> of the 25 published metrics reproduce; <!--r:count.FAIL-->2<!--/r--> does not. A PASS says a number matches; the gaps below say whether a ranking means anything.
+<!--r:count.PASS-->25<!--/r--> published metrics reproduce; <!--r:count.FAIL-->4<!--/r--> do not. A PASS says a number matches; the gaps below say whether a ranking means anything.
 
 | | Finding | Evidence |
 | --- | --- | --- |
 | 1 | Closed-form models reproduce to rounding | GLM1 <!--r:glm.deviance_test-->24.146<!--/r-->, GLM3 <!--r:glm3.deviance_test-->24.102<!--/r-->, Lee–Carter <!--r:lee_carter.rmse_out-->0.3416<!--/r-->, chain-ladder MAPE <!--r:chain_ladder.mape_ultimate-->0.03815<!--/r--> |
-| 2 | Networks beat the best GLM | GLM3 → FNN: <!--r:gap.glm3.fnn-->0.273 (0.182 to 0.364)<!--/r--> |
-| 3 | FNN and CANN cannot be ranked on this test set | FNN → CANN: <!--r:gap.fnn.cann-->0.011 (-0.027 to 0.050)<!--/r-->, <!--r:verdict.fnn.cann-->not distinguishable<!--/r--> |
-| 4 | A plain gradient-boosting model beats every network, even seed-averaged | CANN ×15 → GBM: <!--r:gap.cann_x15.gbm-->0.240 (0.169 to 0.311)<!--/r--> |
+| 2 | Networks beat the best GLM | GLM3 → FNN: <!--r:gap.glm3.fnn-->0.273 (0.181 to 0.364)<!--/r--> |
+| 3 | FNN and CANN cannot be ranked on this test set | FNN → CANN: <!--r:gap.fnn.cann-->-0.000 (-0.039 to 0.038)<!--/r-->, <!--r:verdict.fnn.cann-->not distinguishable<!--/r--> |
+| 4 | A plain gradient-boosting model beats every network, even seed-averaged | CANN ×15 → GBM: <!--r:gap.cann_x15.gbm-->0.249 (0.179 to 0.319)<!--/r--> |
 | 5 | Two of the four mortality networks' published runs beat all 15 of our seeds | Published run vs our 15 seeds: CNN <!--r:cnn.published_run-->inside the seed range<!--/r-->, LSTM <!--r:lstm.published_run-->better than every seed<!--/r-->, Transformer <!--r:transformer.published_run-->better than every seed<!--/r-->. Seeds beating Lee–Carter: CNN <!--r:cnn.seeds_beating_lee_carter-->0<!--/r-->, LSTM <!--r:lstm.seeds_beating_lee_carter-->0<!--/r-->, Transformer <!--r:transformer.seeds_beating_lee_carter-->0<!--/r-->, non-linear CNN <!--r:cnn_tanh.seeds_beating_lee_carter-->6<!--/r--> |
 | 6 | The neural ODP trims the chain-ladder's over-reserving, but not its ultimate-loss error | Total reserve error <!--r:neural_odp.total_reserve_error_pct-->+8.2<!--/r-->% vs chain-ladder <!--r:chain_ladder.total_reserve_error_pct-->+10.8<!--/r-->%; MAPE gap, chain-ladder ahead: <!--r:gap.neural_odp.chain_ladder-->0.0006 (-0.0025 to 0.0036)<!--/r-->, <!--r:verdict.neural_odp.chain_ladder-->not distinguishable<!--/r--> |
 

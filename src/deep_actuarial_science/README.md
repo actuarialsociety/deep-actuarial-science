@@ -25,6 +25,8 @@ flowchart TD
     tlog --> wandb
     nb["notebook.py<br/>run pipelines from Jupyter"] --> registry
     init["__init__.py"]
+    spec["docs/paper_checklist.yml<br/>paper vs code, item by item"] --> check["checklist.py<br/>checks it against conf/ and the code"]
+    check --> report["docs/ report + pytest"]
 ```
 
 | File | Role |
@@ -41,4 +43,5 @@ flowchart TD
 | `hooks.py` | MLflow: figures and per-epoch training curves; `AuditHook`: the audit trail and model version for MLflow and W&B |
 | `audit.py` | per-step duration, row counts and reconciled totals (claims, exposure, premium, paid, reserves); `version()` = package version + git commit |
 | `wandb_hook.py` | optional W&B logging (`WANDB_PROJECT`): config, metrics, tables, figures, curves |
+| `checklist.py` | the paper-to-code checklist (`docs/paper_checklist.yml`): loads it, checks every quoted parameter and symbol against `conf/base` and the code, renders it as Markdown |
 | `notebook.py` | run and inspect pipelines from a notebook (local, container, Colab) |

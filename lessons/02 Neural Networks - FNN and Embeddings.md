@@ -65,7 +65,7 @@ where $e(k)$ = the learned vector of level $k$. One-hot needs $K - 1$ inputs; an
 <details>
 <summary><b>③ Training protocol of the paper</b></summary>
 
-Brauer [[2](https://doi.org/10.1007/s13385-024-00388-2)]: Poisson deviance loss; nadam ($\epsilon = 10^{-7}$, Keras); Keras's Glorot-uniform weights and uniform ±0.05 embeddings; batch 7,000; up to 500 epochs; early stopping with patience 15 on a 10% validation split; output weights 0 and bias $\log\bar\lambda$, so every fit starts at the homogeneous model ($\bar\lambda = \sum_i N_i / \sum_i v_i$). Inputs capped and standardised as in Wüthrich & Merz [[3](https://doi.org/10.1007/978-3-031-12409-9)], Sect. 7.3.2.
+Brauer [[2](https://doi.org/10.1007/s13385-024-00388-2)]: Poisson deviance loss; nadam ($\epsilon = 10^{-7}$, Keras); Keras's Glorot-uniform weights; batch 7,000; up to 500 epochs; early stopping with patience 15 on a 10% validation split; output weights 0 and bias $\log\bar\lambda$, so every fit starts at the homogeneous model ($\bar\lambda = \sum_i N_i / \sum_i v_i$). Two settings are in the paper's public code only: the seven numeric inputs (`Area` as 1–6, `VehPower`, `VehAge`, `DrivAge`, `BonusMalus`, `VehGas`, `Density`) are centred and scaled to unit variance as recorded, with no caps and no logarithm (`preprocess: raw`), and the embeddings start at Normal(1, 0.05) (`embedding_init`). The capped inputs of Wüthrich & Merz [[3](https://doi.org/10.1007/978-3-031-12409-9)], Sect. 7.3.2, are `preprocess: capped`; every component is set against the paper in [`docs/paper_checklist.md`](../docs/paper_checklist.md).
 
 </details>
 
@@ -87,7 +87,7 @@ where $D_s$ = deviance per policy of fit $s$. PASS if $\bar D$ is within twice t
 
 $\displaystyle w_0 \leftarrow w_0 + \log\frac{\sum_i N_i}{\sum_i \hat\mu_i}$
 
-where $\hat\mu_i$ = predicted claim count on the learning data. Early stopping leaves $\sum_i \hat\mu_i \ne \sum_i N_i$ (here <!--r:fnn.balance_learn-->1.0050<!--/r-->×); the shift rescales every prediction equally (`balance_correction: true`).
+where $\hat\mu_i$ = predicted claim count on the learning data. Early stopping leaves $\sum_i \hat\mu_i \ne \sum_i N_i$ (here <!--r:fnn.balance_learn-->1.0003<!--/r-->×); the shift rescales every prediction equally (`balance_correction: true`).
 
 </details>
 
@@ -112,13 +112,13 @@ Poisson deviance per policy, $\times 10^{-2}$; mean (sd) over 15 seeds.
 | Model | Published learn | Published test | This repo learn | This repo test | Status |
 | --- | --- | --- | --- | --- | --- |
 | GLM1 ([[3](https://doi.org/10.1007/978-3-031-12409-9)], Table 5.3) | 24.101 | 24.146 | <!--r:glm.deviance_learn-->24.101<!--/r--> | <!--r:glm.deviance_test-->24.146<!--/r--> | <!--r:glm.status-->PASS<!--/r--> |
-| FNN | 23.768 (0.016) | 23.827 (0.015) | <!--r:fnn.deviance_learn-->23.774<!--/r--> (<!--r:fnn.deviance_learn_sd-->0.027<!--/r-->) | <!--r:fnn.deviance_test-->23.829<!--/r--> (<!--r:fnn.deviance_test_sd-->0.020<!--/r-->) | <!--r:fnn.status-->PASS<!--/r--> |
-| FNN, average of 15 | n/a | n/a | <!--r:fnn.deviance_ensemble_learn-->23.745<!--/r--> | <!--r:fnn.deviance_ensemble_test-->23.800<!--/r--> | |
+| FNN | 23.768 (0.016) | 23.827 (0.015) | <!--r:fnn.deviance_learn-->23.777<!--/r--> (<!--r:fnn.deviance_learn_sd-->0.019<!--/r-->) | <!--r:fnn.deviance_test-->23.830<!--/r--> (<!--r:fnn.deviance_test_sd-->0.020<!--/r-->) | <!--r:fnn.status-->PASS<!--/r--> |
+| FNN, average of 15 | n/a | n/a | <!--r:fnn.deviance_ensemble_learn-->23.747<!--/r--> | <!--r:fnn.deviance_ensemble_test-->23.797<!--/r--> | |
 
 Gap in test deviance, 95% interval over test policies (lesson 00, Core ideas ⑥):
 
-- **GLM3 → FNN:** <!--r:gap.glm3.fnn-->0.273 (0.182 to 0.364)<!--/r-->, <!--r:verdict.glm3.fnn-->real<!--/r-->
-- **Averaging the 15 fits:** <!--r:gap.fnn.fnn_x15-->0.029 (0.028 to 0.030)<!--/r-->, more than the seed sd of one fit
+- **GLM3 → FNN:** <!--r:gap.glm3.fnn-->0.273 (0.181 to 0.364)<!--/r-->, <!--r:verdict.glm3.fnn-->real<!--/r-->
+- **Averaging the 15 fits:** <!--r:gap.fnn.fnn_x15-->0.032 (0.030 to 0.034)<!--/r-->, more than the seed sd of one fit
 
 ---
 

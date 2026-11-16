@@ -1,0 +1,443 @@
+# Paper-to-code checklist: each benchmark paper's algorithm, equations and hyperparameters, set
+# against this repository's code (the `paper-to-code` skill, Phase 1).
+#
+# One block per model. `paper`/`code`/`text`: the source, its public code if any, and its key
+# in the local research library (data/12_research/text/<text>.txt, `scripts/research.py`).
+# Each item:
+#   what    the component
+#   paper   what the paper (or its code) does, and `where` it says so
+#   status  match | deviation (ours differs: `note` says why) | open (source silent or not read)
+#   param   dotted path into conf/base parameters, with `value`: pytest fails if they differ
+#   code    <file under src/deep_actuarial_science>::<symbol>: pytest fails if it is gone
+#   ours    what our code does (omit with `param`: the value is shown instead)
+# `scripts/build_docs.py` renders this into docs/index.html and docs/paper_checklist.md.
+
+frequency.glm:
+  title: "Poisson GLM1 and GLM3"
+  paper: "Wüthrich & Merz (2023), Statistical Foundations of Actuarial Learning and its Applications, Springer"
+  doi: 10.1007/978-3-031-12409-9
+  text: 10.1007_978-3-031-12409-9
+  items:
+    - what: "Learning and test sets"
+      paper: "610,206 and 67,801 policies, fixed split"
+      where: "Table 5.2"
+      ours: "the split shipped with the data (column `LearnTest`)"
+      code: pipelines/frequency/nodes.py::prepare
+      status: match
+    - what: "Model"
+      paper: "Poisson, log link, log-exposure offset, maximum likelihood"
+      where: "Sect. 5.2.4"
+      ours: "statsmodels Poisson GLM with `offset=log(Exposure)`"
+      code: models/frequency.py::GLM
+      status: match
+    - what: "GLM1 covariates (49 parameters)"
+      paper: "Area linear 1-6; VehPower, VehAge, DrivAge in classes; BonusMalus capped at 150; log Density; VehBrand, VehGas, Region"
+      where: "Sect. 5.2.4, Table 5.3"
+      ours: "`add_glm_features` and the `glm` formula"
+      code: models/frequency.py::add_glm_features
+      status: match
+    - what: "GLM3 covariates (50 parameters)"
+      paper: "driver age as a polynomial of degree 4 plus log, and two BonusMalus x age interactions"
+      where: "Table 5.5"
+      ours: "the `glm3` formula in `conf/base/parameters_frequency.yml`"
+      code: models/frequency.py::GLM
+      status: match
+    - what: "Loss reported"
+      paper: "Poisson deviance per policy, in 10^-2"
+      where: "eq. 5.28"
+      ours: "`poisson_deviance_per_policy`"
+      code: metrics.py::poisson_deviance_per_policy
+      status: match
+
+frequency.fnn:
+  title: "FNN with embeddings"
+  paper: "Brauer (2024), Enhancing actuarial non-life pricing models via transformers, European Actuarial Journal"
+  doi: 10.1007/s13385-024-00388-2
+  code: https://github.com/BrauerAlexej/Enhancing_actuarial_non-life_pricing_models_via_transformers_Public
+  text: 10.1007_s13385-024-00388-2
+  items:
+    - what: "Architecture"
+      paper: "three hidden layers (20, 15, 10), tanh; exponential output times exposure"
+      where: "Sect. 4.2; eq. in Sect. 3.2"
+      param: frequency.models.fnn.hidden
+      value: [20, 15, 10]
+      status: match
+    - what: "Categorical features"
+      paper: "VehBrand and Region as two-dimensional embeddings"
+      where: "Sect. 4.2"
+      param: frequency.models.fnn.embedding_dims
+      value: [2, 2]
+      status: match
+    - what: "Number of weights"
+      paper: "792"
+      where: "Table 1 (f)"
+      ours: "792, reconciled as a benchmark (`n_params`)"
+      code: models/frequency.py::EmbeddingFNN
+      status: match
+    - what: "Numeric features"
+      paper: "standard scaler on Area (1-6), VehPower, VehAge, DrivAge, BonusMalus, VehGas and Density as recorded; no caps, no logarithm"
+      where: "Sect. 4.1; code, notebook Sect. 2.6"
+      param: frequency.models.fnn.preprocess
+      value: raw
+      status: match
+    - what: "Embedding start"
+      paper: "Normal(mean 1, sd 0.05)"
+      where: "code, notebook Sect. 3.4 (not in the paper's text)"
+      param: frequency.models.fnn.embedding_init
+      value: [1.0, 0.05]
+      status: match
+    - what: "Output layer start"
+      paper: "weights 0, bias log of the mean response on the training data"
+      where: "Sect. 4.2"
+      ours: "weights 0, bias log(claims / exposure) of the learning set"
+      code: models/frequency.py::FNN
+      status: match
+    - what: "Optimiser"
+      paper: "nadam, Keras defaults (learning rate 0.001, epsilon 1e-7)"
+      where: "Sect. 4.2"
+      param: frequency.models.fnn.lr
+      value: 0.001
+      status: match
+    - what: "Batch size"
+      paper: "7,000"
+      where: "Sect. 4.2"
+      param: frequency.models.fnn.batch_size
+      value: 7000
+      status: match
+    - what: "Epochs and early stopping"
+      paper: "up to 500 epochs, patience 15 on the validation loss, best weights restored"
+      where: "Sect. 4.2; code (`restore_best_weights=True`)"
+      param: frequency.models.fnn.patience
+      value: 15
+      status: match
+    - what: "Validation data"
+      paper: "10% of the learning set, a new random split for each of the 15 seeds"
+      where: "Sect. 4.1, 4.3"
+      param: frequency.models.fnn.n_runs
+      value: 15
+      status: match
+    - what: "Seeds and splits"
+      paper: "15 seeds drawn with numpy from seed 42; splits by scikit-learn with the same seeds"
+      where: "code, notebook Sect. 1.5, 2.4"
+      ours: "seeds 21456783 + run; splits from 125548 + run"
+      code: models/frequency.py::split_train_val
+      status: deviation
+      note: "Keras and PyTorch draw different numbers from the same seed, so the paper's runs cannot be redrawn; the benchmark compares the two 15-seed means instead."
+    - what: "Loss"
+      paper: "Poisson deviance, mean over the batch"
+      where: "eq. 12"
+      ours: "Poisson negative log-likelihood, summed over the batch"
+      code: models/torch_utils.py::train_poisson
+      status: deviation
+      note: "Same minimiser; the two differ by a constant and a scale that nadam's normalisation removes (up to epsilon)."
+    - what: "Ensemble of 5 rebalanced networks"
+      paper: "mean (sd) over 3 ensembles"
+      where: "Table 4"
+      ours: "`deviance_ensemble_*` averages all 15 seeds; not reconciled"
+      code: pipelines/frequency/nodes.py::evaluate
+      status: open
+      note: "Three ensembles give a standard error too noisy for a PASS/FAIL test."
+
+frequency.cann:
+  title: "CANN on GLM3"
+  paper: "Brauer (2024), Enhancing actuarial non-life pricing models via transformers, European Actuarial Journal"
+  doi: 10.1007/s13385-024-00388-2
+  code: https://github.com/BrauerAlexej/Enhancing_actuarial_non-life_pricing_models_via_transformers_Public
+  text: 10.1007_s13385-024-00388-2
+  items:
+    - what: "Model"
+      paper: "the FNN above with the GLM3 prediction times exposure as offset"
+      where: "eq. 3-4; Sect. 4.2"
+      ours: "`CANN` = `FNN` with `uses_base`; the pipeline passes the fitted `glm3`"
+      code: models/frequency.py::CANN
+      status: match
+    - what: "Start"
+      paper: "output weights and bias 0, so training starts at GLM3"
+      where: "Sect. 4.2"
+      ours: "the same (`bias0 = 0`)"
+      code: models/frequency.py::EmbeddingFNN
+      status: match
+    - what: "Network, features, embeddings"
+      paper: "as FNN_EMB"
+      where: "Sect. 4.2; code, notebook Sect. 3.5"
+      param: frequency.models.cann.preprocess
+      value: raw
+      status: match
+    - what: "Embedding start"
+      paper: "Normal(mean 1, sd 0.05)"
+      where: "code, notebook Sect. 3.5"
+      param: frequency.models.cann.embedding_init
+      value: [1.0, 0.05]
+      status: match
+    - what: "Training"
+      paper: "nadam, batch 7,000, up to 500 epochs, patience 15"
+      where: "Sect. 4.2"
+      param: frequency.models.cann.batch_size
+      value: 7000
+      status: match
+    - what: "GLM coefficients"
+      paper: "not trainable"
+      where: "Sect. 3.3"
+      ours: "the offset is a fixed input"
+      code: models/frequency.py::FNN
+      status: match
+
+frequency.localglmnet:
+  title: "LocalGLMnet"
+  paper: "Richman & Wüthrich (2023), LocalGLMnet: interpretable deep learning for tabular data, Scandinavian Actuarial Journal"
+  doi: 10.1080/03461238.2022.2081816
+  text: 10.1080_03461238.2022.2081816
+  items:
+    - what: "Model"
+      paper: "log mu(x) = beta0 + <beta(x), x>, beta(x) a network with q outputs"
+      where: "eq. 2.7; Sect. 3.4"
+      ours: "`LocalGLMnetNet`"
+      code: models/frequency.py::LocalGLMnetNet
+      status: match
+    - what: "Inputs"
+      paper: "q = 42, one-hot VehBrand and Region, six continuous and one binary feature centred and scaled, RandU and RandN controls"
+      where: "Sect. 3.4"
+      ours: "`localglmnet_preprocessor`, 42 columns"
+      code: models/frequency.py::localglmnet_preprocessor
+      status: match
+    - what: "Layers"
+      paper: "(42, 20, 15, 10, 42), tanh then linear"
+      where: "Sect. 3.4"
+      param: frequency.models.localglmnet.hidden
+      value: [20, 15, 10]
+      status: match
+    - what: "Training"
+      paper: "nadam, batch 5,000, 100 epochs, weights with the lowest validation loss"
+      where: "Sect. 3.4"
+      param: frequency.models.localglmnet.epochs
+      value: 100
+      status: match
+    - what: "Batch size"
+      paper: "5,000"
+      where: "Sect. 3.4"
+      param: frequency.models.localglmnet.batch_size
+      value: 5000
+      status: match
+    - what: "Caps and log-density before scaling"
+      paper: "not stated (only centring and scaling)"
+      where: "Sect. 3.4"
+      ours: "caps of Wüthrich & Merz (2023), Sect. 7.3.2, and log Density"
+      code: models/frequency.py::localglmnet_preprocessor
+      status: open
+      note: "The paper points to that book's network listing for the architecture; Brauer's reimplementation scales the raw values."
+    - what: "Validation share"
+      paper: "not stated for the motor data (20% in the synthetic example)"
+      where: "Sect. 3.1, 3.4"
+      ours: "10%, a new split per seed"
+      code: models/frequency.py::split_train_val
+      status: open
+      note: "Brauer (2024) also uses 10% and reports results in line with the paper."
+    - what: "Start of the attention layer"
+      paper: "not stated (Keras defaults in Listing 1)"
+      where: "Appendix A, Listing 1"
+      ours: "weights 0 and biases at a Poisson GLM on the same design"
+      code: models/frequency.py::LocalGLMnet
+      status: deviation
+      note: "The GLM start is Brauer's (2024, Sect. 4.2); training then starts from the GLM's fit."
+    - what: "Final scaling layer"
+      paper: "a dense(1) layer on <beta(x), x>: a trainable scale and intercept"
+      where: "Appendix A, Listing 1"
+      ours: "a trainable intercept only"
+      code: models/frequency.py::LocalGLMnetNet
+      status: deviation
+      note: "The scale can be absorbed into the attention layer, so the model class is the same."
+    - what: "Runs"
+      paper: "one"
+      where: "Table 2 (c)"
+      param: frequency.models.localglmnet.n_runs
+      value: 15
+      status: deviation
+      note: "Fifteen seeds give the spread the single published run is checked against."
+
+mortality.lee_carter:
+  title: "Lee-Carter"
+  paper: "Richman, Scognamiglio & Wüthrich (2026), AI Tools for Actuaries, Ch. 8"
+  url: https://aitools4actuaries.com/Ch8E/mortality_forecasting.pdf
+  text: aitools-ch8
+  items:
+    - what: "Data"
+      paper: "Swiss HMD, ages 0-89, 1900-2021, log(max(m, e^-11))"
+      where: "p. 5"
+      param: mortality.data.max_age
+      value: 90
+      status: match
+    - what: "Learning and test years"
+      paper: "males, learn to 1999, forecast 2000-2021"
+      where: "p. 11"
+      param: mortality.data.obs_year
+      value: 1999
+      status: match
+    - what: "Fit"
+      paper: "centre by age, first singular vectors, sum b = 1 and sum k = 0"
+      where: "p. 31"
+      ours: "`lee_carter`"
+      code: models/mortality.py::lee_carter
+      status: match
+    - what: "Forecast"
+      paper: "random walk with drift on k (`rwf(kt, drift = TRUE)`)"
+      where: "p. 31"
+      ours: "drift = mean yearly change of k"
+      code: models/mortality.py::lee_carter
+      status: match
+
+mortality.networks:
+  title: "CNN, non-linear CNN, LSTM, Transformer"
+  paper: "Richman, Scognamiglio & Wüthrich (2026), AI Tools for Actuaries, Ch. 8"
+  url: https://aitools4actuaries.com/Ch8E/mortality_forecasting.pdf
+  text: aitools-ch8
+  items:
+    - what: "Scaling"
+      paper: "min-max over all years of the data, test years included"
+      where: "p. 20"
+      param: mortality.training.scaler_fit
+      value: all
+      status: match
+      note: "The look-ahead is the book's; `scaler_fit: learn` removes it."
+    - what: "Windows"
+      paper: "10 years in, the next year out; targets 1910-1999 (90 windows)"
+      where: "p. 22"
+      param: mortality.training.lookback
+      value: 10
+      status: match
+    - what: "Forecast"
+      paper: "recursive, from the 1990-1999 window"
+      where: "p. 28"
+      ours: "`neural_forecast`"
+      code: models/mortality.py::neural_forecast
+      status: match
+    - what: "CNN"
+      paper: "Conv1D(3 filters, kernel 3, linear), flatten, dense(90)"
+      where: "p. 19"
+      param: mortality.models.cnn.arch
+      value: {filters: 3, kernel: 3}
+      status: match
+    - what: "Non-linear CNN"
+      paper: "dense(20, tanh) per year, Conv1D(3, 3), dense(50, tanh), dense(90)"
+      where: "p. 53"
+      param: mortality.models.cnn_tanh.arch
+      value: {filters: 3, kernel: 3, qq: [20, 50]}
+      status: match
+    - what: "LSTM"
+      paper: "dense(20) per year, LSTM(20, linear activation, sigmoid gates, forget bias 1), dense(90)"
+      where: "p. 34"
+      param: mortality.models.lstm.arch
+      value: {q: 20, units: 20}
+      status: match
+    - what: "Transformer"
+      paper: "dense(3); query, key, value dense(3); scaled attention; skip; layer norm; dense(3); skip; dense(90)"
+      where: "p. 43"
+      param: mortality.models.transformer.arch
+      value: {units: 3}
+      status: match
+    - what: "Layer-normalisation epsilon"
+      paper: "Keras default 1e-3"
+      where: "p. 43 (`layer_layer_normalization`)"
+      ours: "`nn.LayerNorm(units, eps=1e-3)`"
+      code: models/mortality.py::Transformer
+      status: match
+    - what: "Loss and optimiser"
+      paper: "mean squared error; Adam, learning rate 0.001, Keras epsilon"
+      where: "p. 24"
+      param: mortality.training.lr
+      value: 0.001
+      status: match
+    - what: "Epochs and batch"
+      paper: "1,000 epochs, batch 4, best weights by validation loss"
+      where: "pp. 24-26"
+      param: mortality.training.batch_size
+      value: 4
+      status: match
+    - what: "Validation windows"
+      paper: "shuffle once with `set.seed(100)`, last 10% for validation"
+      where: "pp. 22, 26"
+      param: mortality.training.shuffle_seed
+      value: 100
+      status: match
+    - what: "Learning-rate plateau"
+      paper: "factor 0.9, patience 5; Keras's absolute `min_delta = 1e-4`"
+      where: "p. 24"
+      ours: "factor 0.9, patience 5, relative threshold 1e-4"
+      code: models/mortality.py::_train
+      status: deviation
+      note: "With the absolute threshold every network underfits (CNN in-sample RMSE 0.241 against the book's 0.2108; relative 0.206), so the book's runs did not decay that way."
+    - what: "Runs"
+      paper: "one, seed 100; \"not very robust\""
+      where: "p. 57"
+      param: mortality.training.n_runs
+      value: 15
+      status: deviation
+      note: "PyTorch cannot redraw Keras's seed; the published run is checked against our 15 seeds."
+
+reserving.chain_ladder:
+  title: "Chain-ladder"
+  paper: "Kuo (2019), DeepTriangle: a deep learning approach to loss reserving, Risks 7(3) 97"
+  doi: 10.3390/risks7030097
+  text: 10.3390_risks7030097
+  items:
+    - what: "Data"
+      paper: "CAS Loss Reserving Database, 50 private passenger auto companies of Meyers (2015)"
+      where: "Sect. 3"
+      param: reserving.data.max_companies
+      value: 50
+      status: match
+    - what: "Model"
+      paper: "Mack's model, whose point estimate is the volume-weighted chain-ladder"
+      where: "Table 1, Mack column"
+      ours: "`chain_ladder`, cross-checked against the `chainladder` package"
+      code: models/reserving.py::chain_ladder
+      status: match
+    - what: "Metrics"
+      paper: "MAPE and RMSPE of the ultimate loss over companies"
+      where: "eq. 16-17"
+      ours: "`ultimates`, then `mape_ultimate` and `rmspe_ultimate`"
+      code: models/reserving.py::ultimates
+      status: match
+    - what: "Mack's standard error"
+      paper: "the distribution-free standard error of the reserve"
+      where: "Mack (1993), doi:10.2143/AST.23.2.2005092"
+      ours: "not computed"
+      code: models/reserving.py::chain_ladder
+      status: open
+      note: "The benchmark is on point estimates only."
+
+reserving.neural_odp:
+  title: "Neural ODP"
+  paper: "Gabrielli, Richman & Wüthrich (2020), Neural network embedding of the over-dispersed Poisson reserving model, Scandinavian Actuarial Journal"
+  doi: 10.1080/03461238.2019.1633394
+  items:
+    - what: "Paper text"
+      paper: "not in the local research library (no open-access copy found)"
+      where: "`scripts/research.py status`"
+      ours: "built from the paper's idea only, so it is described as \"in the spirit of\" the paper"
+      code: models/reserving.py::NeuralODP
+      status: open
+      note: "Add the PDF to data/12_research/manual/ to check it line by line."
+    - what: "Idea"
+      paper: "a neural network embedding of the over-dispersed Poisson reserving model"
+      where: "title"
+      ours: "chain-ladder mean as offset; embeddings of company, line and development year; zero start"
+      code: models/reserving.py::NeuralODP
+      status: open
+    - what: "Network"
+      paper: "not read"
+      where: "-"
+      param: reserving.models.neural_odp.hidden
+      value: [16, 8]
+      status: open
+    - what: "Number of epochs"
+      paper: "not read"
+      where: "-"
+      ours: "chosen out of time (train to 1996, validate on the 1997 diagonal), then a refit"
+      code: models/reserving.py::neural_odp
+      status: open
+    - what: "Published benchmark"
+      paper: "none on Schedule P"
+      where: "-"
+      ours: "back-tested against the realised lower triangle and compared with chain-ladder"
+      code: models/reserving.py::reserves
+      status: open

@@ -15,6 +15,9 @@
 #   scripts/full_run.sh reference        # pass 1 only
 #   scripts/full_run.sh scale_up         # pass 2 only
 #   DAS_DEVICE=cpu scripts/full_run.sh   # same run on the CPU, to compare
+#   REF_PIPELINES=frequency scripts/full_run.sh reference   # rerun one pipeline, then freeze
+#                                        # (data/08_reporting must hold the reference reports
+#                                        # of the others: copy them back from data/09_full_run)
 #   REF_ENV=smoke UP_ENV=smoke WANDB_MODE=offline scripts/full_run.sh   # 2-minute check
 #
 # Needs: pip install -e ".[wandb]", and WANDB_API_KEY in .env (or `wandb login`). Without a
@@ -27,6 +30,7 @@ KEDRO=$(dirname "$PY")/kedro; [ -x "$KEDRO" ] || KEDRO=kedro
 
 export DAS_DEVICE=${DAS_DEVICE:-mps}
 REF_ENV=${REF_ENV:-local} UP_ENV=${UP_ENV:-scale_up}
+REF_PIPELINES=${REF_PIPELINES:-frequency mortality reserving}
 export WANDB_PROJECT=${WANDB_PROJECT:-deep-actuarial-science}
 export WANDB_RUN_GROUP=${WANDB_RUN_GROUP:-full-$DAS_DEVICE-$(date +%Y%m%d-%H%M)}
 export DO_NOT_TRACK=1 MLFLOW_DISABLE_AGENT_HINT=1
@@ -61,7 +65,7 @@ passes=("${@:-reference scale_up}")
 for pass in ${passes[*]}; do
   case $pass in
     reference)
-      for p in frequency mortality reserving; do run "$REF_ENV" "$p"; done
+      for p in $REF_PIPELINES; do run "$REF_ENV" "$p"; done
       cp -R data/08_reporting "$OUT/reference" && find "$OUT/reference" -name .gitkeep -delete
       "$PY" - "$OUT/reference" <<'EOF'
 import glob, sys

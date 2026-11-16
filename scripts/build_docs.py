@@ -12,15 +12,21 @@ Run by `freeze_reference.py`, so the docs always show the frozen reference run.
   The published value is the ground truth on every chart, so a reviewer sees at a glance
   how far each reproduction is from its paper.
 - `docs/slides.md`: the same story as a Marp deck (published with the lesson slides).
+- `docs/paper_checklist.md`: each paper's components against our code, from
+  `docs/paper_checklist.yml` (also an expandable section of the report).
 """
 
 from __future__ import annotations
 
+import html as html_lib
 import json
+import re
 import sys
 from pathlib import Path
 
 import pandas as pd
+
+from deep_actuarial_science import checklist
 
 ROOT = Path(__file__).resolve().parent.parent
 REF, OUT = ROOT / "reference", ROOT / "docs"
@@ -146,6 +152,38 @@ def table(df: pd.DataFrame) -> str:
     return df.to_html(index=False, border=0, classes="t", float_format=lambda x: f"{x:.4g}")
 
 
+def _inline(text: str) -> str:
+    """Escape text for HTML and turn `backticks` into <code>."""
+    return re.sub(r"`([^`]+)`", r"<code>\1</code>", html_lib.escape(str(text)))
+
+
+def checklist_html(models: dict) -> str:
+    """One expandable panel per model: paper component, where it is stated, ours, status.
+    The summary line counts each status, so a reviewer opens only the panels with deviations."""
+    marks = {"match": "✓", "deviation": "≠", "open": "?"}
+    panels = []
+    for key, m in models.items():
+        n = {s: sum(i["status"] == s for i in m["items"]) for s in marks}
+        link = f"https://doi.org/{m['doi']}" if m.get("doi") else m.get("url", "")
+        source = f'<a href="{link}">{_inline(m["paper"])}</a>' if link else _inline(m["paper"])
+        source += f' · <a href="{m["code"]}">paper\'s code</a>' if m.get("code") else ""
+        rows = "".join(
+            f'<tr class="{i["status"]}"><td>{marks[i["status"]]}</td><td>{_inline(i["what"])}</td>'
+            f"<td>{_inline(i['paper'])}<br><span class='muted'>{_inline(i['where'])}</span></td>"
+            f"<td>{_inline(i['ours'])}"
+            + (f"<br><span class='muted'>{_inline(i['note'])}</span>" if i.get("note") else "")
+            + "</td></tr>"
+            for i in m["items"]
+        )
+        panels.append(
+            f"<details><summary>{_inline(m['title'])} <span class='muted'>· {n['match']} ✓ · "
+            f"{n['deviation']} ≠ · {n['open']} ?</span></summary><p>{source} "
+            f"<span class='muted'>(<code>{key}</code>)</span></p><table class='t'><tr><th></th>"
+            f"<th>Component</th><th>Paper</th><th>Ours</th></tr>{rows}</table></details>"
+        )
+    return "".join(panels)
+
+
 def html(d: dict) -> str:
     rec, env = d["rec"], d["env"]
     n_pass, n_fail = int((rec.status == "PASS").sum()), int((rec.status == "FAIL").sum())
@@ -154,6 +192,8 @@ def html(d: dict) -> str:
     res = m.loc[["chain_ladder", "neural_odp"], ["total_reserve_error_pct", "mape_ultimate"]]
     charts = {"distance": chart_distance(rec), "gaps": chart_gaps(d["freq"]),
               "seeds": chart_seeds(d["mort"])}  # fmt: skip
+    spec = checklist.load()
+    n_spec = checklist.summary(spec)
     data_rows = "".join(f"<tr><td>{a}</td><td>{b}</td><td>{c}</td></tr>" for a, b, c in DATA)
     links = " · ".join(f'<a href="{u}">{t}</a>' for t, u in LINKS)
     fail_list = "".join(
@@ -182,6 +222,8 @@ summary {{ cursor:pointer; font-weight:600; }}
 .t {{ border-collapse:collapse; font-size:13px; width:100%; overflow-x:auto; display:block; }}
 .t td, .t th {{ border-bottom:1px solid var(--line); padding:3px 8px; text-align:left; }}
 code {{ background:var(--card); padding:1px 4px; border-radius:4px; }}
+tr.deviation td:first-child {{ color:{RED}; font-weight:700; }}
+tr.match td:first-child {{ color:{GREEN}; font-weight:700; }}
 </style></head><body>
 <h1>Deep actuarial science: benchmark report</h1>
 <div class="muted">Model version <b>{env.get("package_version", "?")}</b> · commit
@@ -217,6 +259,16 @@ neural ODP {res.loc["neural_odp", "total_reserve_error_pct"]:+.1f}% (positive = 
 MAPE of ultimate: {res.loc["chain_ladder", "mape_ultimate"]:.4f} vs
 {res.loc["neural_odp", "mape_ultimate"]:.4f}, gap
 {d["res"].verdict.iloc[0]} (Holm p {d["res"].p_holm.iloc[0]:.2f}).</p>
+
+<h2>Implemented as in the paper?</h2>
+<p class="muted">Each paper's architecture, equations, hyperparameters and data handling, set
+against our code. A test fails if a setting quoted here changes.</p>
+<div class="kpis">
+<div class="kpi"><b style="color:{GREEN}">{n_spec["match"]}</b>✓ as in the paper</div>
+<div class="kpi"><b style="color:{RED}">{n_spec["deviation"]}</b>≠ deviations, with reason</div>
+<div class="kpi"><b>{n_spec["open"]}</b>? source silent or not read</div>
+</div>
+{checklist_html(spec)}
 
 <h2>Detail</h2>
 <details><summary>Data used</summary><table class="t"><tr><th>Dataset</th><th>Scope</th>
@@ -273,6 +325,14 @@ def slides(d: dict) -> str:
     mort = d["mort"][d["mort"].seeds > 1]
     seeds = "\n".join(f"| {r.model} | {r.published} | {r.seed_min:.3f}–{r.seed_max:.3f} | "
                       f"{r.published_run} |" for r in mort.itertuples())  # fmt: skip
+    spec = checklist.load()
+    n_spec = checklist.summary(spec)
+    dev_rows = "\n".join(
+        f"- **{m['title']}**, {i['what'].lower()}: {i['note']}"
+        for m in spec.values()
+        for i in m["items"]
+        if i["status"] == "deviation"
+    )
     return f"""---
 marp: true
 paginate: true
@@ -310,6 +370,17 @@ Full interactive report: `docs/index.html`.
 
 ---
 
+## Implemented as in the paper?
+
+**{n_spec["match"]}** components as in the paper, **{n_spec["deviation"]}** documented deviations,
+**{n_spec["open"]}** where the source is silent or not yet read.
+
+{dev_rows}
+
+Every component: `docs/paper_checklist.md`.
+
+---
+
 ## Data, reproduce, systems
 
 - Data: freMTPL2; Swiss HMD; CAS Schedule P (Meyers' 50 companies)
@@ -320,7 +391,11 @@ Full interactive report: `docs/index.html`.
 
 def main(check: bool = False) -> int:
     d = load()
-    outputs = {OUT / "index.html": html(d), OUT / "slides.md": slides(d)}
+    outputs = {
+        OUT / "index.html": html(d),
+        OUT / "slides.md": slides(d),
+        OUT / "paper_checklist.md": checklist.markdown(),
+    }
     stale = [p for p, text in outputs.items() if not p.exists() or p.read_text() != text]
     if check:
         for p in stale:

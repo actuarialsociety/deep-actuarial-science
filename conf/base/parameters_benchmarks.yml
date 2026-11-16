@@ -23,18 +23,30 @@ benchmarks:
       tolerance: 0.001
       expected: {deviance_learn: 24.084, deviance_test: 24.102}
     gbm: null   # no published configuration on this split; compared on the leaderboard only
+    # Networks: the loss (Table 2) and how the fit went (Table 1): the number of weights must
+    # match exactly, the stopping epoch within 2 standard errors like the losses.
     fnn:
-      source: [*brauer, "Table 2 (f) FNN_EMB, mean (sd) over 15 seeds: 23.768 (0.016), 23.827 (0.015)"]
-      tolerance: "2se"   # two 15-seed means: 2 x sqrt(sd_pub^2/15 + sd_ours^2/15)
-      sd: {deviance_learn: 0.016, deviance_test: 0.015}
-      n: 15
-      expected: {deviance_learn: 23.768, deviance_test: 23.827}
+      - source: [*brauer, "Table 2 (f) FNN_EMB, mean (sd) over 15 seeds: 23.768 (0.016), 23.827 (0.015)"]
+        tolerance: "2se"   # two 15-seed means: 2 x sqrt(sd_pub^2/15 + sd_ours^2/15)
+        sd: {deviance_learn: 0.016, deviance_test: 0.015}
+        n: 15
+        expected: {deviance_learn: 23.768, deviance_test: 23.827}
+      - source: [*brauer, "Table 1 (f) FNN_EMB: 792 parameters; best epoch 73 (sd 22) over 15 seeds"]
+        tolerance: {n_params: 0.5, epochs: "2se"}   # a count: exact
+        sd: {epochs: 22}
+        n: 15
+        expected: {n_params: 792, epochs: 73}
     cann:
-      source: [*brauer, "Table 2 (g) CANN on GLM3, mean (sd) over 15 seeds: 23.742 (0.061), 23.810 (0.033)"]
-      tolerance: "2se"
-      sd: {deviance_learn: 0.061, deviance_test: 0.033}
-      n: 15
-      expected: {deviance_learn: 23.742, deviance_test: 23.810}
+      - source: [*brauer, "Table 2 (g) CANN on GLM3, mean (sd) over 15 seeds: 23.742 (0.061), 23.810 (0.033)"]
+        tolerance: "2se"
+        sd: {deviance_learn: 0.061, deviance_test: 0.033}
+        n: 15
+        expected: {deviance_learn: 23.742, deviance_test: 23.810}
+      - source: [*brauer, "Table 1 (g) CANN: 792 parameters; best epoch 90 (sd 54) over 15 seeds"]
+        tolerance: {n_params: 0.5, epochs: "2se"}   # a count: exact
+        sd: {epochs: 54}
+        n: 15
+        expected: {n_params: 792, epochs: 90}
     localglmnet:
       source:
         - "Richman & Wüthrich (2023), LocalGLMnet: interpretable deep learning for tabular data, Scandinavian Actuarial Journal, doi:10.1080/03461238.2022.2081816"

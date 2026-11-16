@@ -82,9 +82,11 @@ Code, Copilot) maintain the lessons and add models.
 
 ### 3. Adding a model (the core workflow)
 
-0. Read the paper with the `paper-to-code` skill's Phase 1 (algorithm, equation and
-   hyperparameter checklist, from `data/12_research/text/`); use its code and test patterns,
-   not its standalone-project scaffolding.
+0. Read the paper, and its public code if it has any, with the `paper-to-code` skill's
+   Phase 1 (algorithm, equation and hyperparameter checklist, from `data/12_research/text/`);
+   record the checklist as the model's block in `docs/paper_checklist.yml` (checked by
+   `pytest`, published in `docs/`). Use the skill's code and test patterns, not its
+   standalone-project scaffolding.
 1. Implement it in `models/<domain>.py` with the domain's interface and register it
    (`MODELS` dict or the pipeline's `MODELS` list).
 2. Add its parameter block under `<domain>.models.<name>` and, if one exists, its
@@ -127,6 +129,7 @@ GITHUB_TOKEN=$(gh auth token) python3 scripts/fix_math.py --github   # math rend
 | EDA and model analysis | `python scripts/eda.py` (each dataset) and `python scripts/model_analysis.py` (each fitted model, after a full run): local Markdown reports in `data/10_eda/` and `data/11_model_analysis/`, never logged to MLflow or W&B |
 | Research library (local) | `python scripts/research.py fetch` then `index`: every paper the repo cites, open-access PDFs from OpenAlex, repositories and arXiv, full-text indexed per page in `data/12_research/` (never committed); `research.py search "query"` answers with paper and page; `status` lists paywalled papers to add by hand |
 | Visual report | `docs/index.html` and `docs/slides.md`, rebuilt from `reference/` by `scripts/build_docs.py` (run by the freeze; Pages: `report.html`, `summary.html`) |
+| Implemented as in the paper? | `docs/paper_checklist.yml`: each paper's components against our code (match, deviation with reason, or open); `pytest` fails if a quoted parameter or symbol changes; rendered to `docs/paper_checklist.md` and the report |
 | Container | `docker compose up lab mlflow` (JupyterLab :8888, MLflow :5000) |
 | Slides | `npx @marp-team/marp-cli@4.5.1 --html -s lessons` (published to Pages by `slides.yml`) |
 | Wiki | Generated from `README.md` + `lessons/` on push to `main` (`wiki-sync.yml`) |

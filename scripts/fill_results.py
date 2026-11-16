@@ -46,6 +46,14 @@ def collect() -> dict[str, str]:
                 f"{r.gap:.{digits}f} ({r.ci_low:.{digits}f} to {r.ci_high:.{digits}f})"
             )
             values[f"verdict.{pair}"] = r.verdict
+            # the same gap read the other way round, so a marker survives two near-equal
+            # models swapping places between reference runs (a negative gap: `better` is worse)
+            back = f"{r.better}.{r.worse}"
+            values.setdefault(
+                f"gap.{back}",
+                f"{-r.gap:.{digits}f} ({-r.ci_high:.{digits}f} to {-r.ci_low:.{digits}f})",
+            )
+            values.setdefault(f"verdict.{back}", r.verdict)
     for row in pd.read_csv(REF / "mortality_findings.csv").to_dict("records"):
         for k, v in row.items():
             if k != "model" and pd.notna(v):

@@ -147,6 +147,15 @@ def reserves(pred: pd.DataFrame) -> pd.DataFrame:
 
 
 class NeuralODP(nn.Module):
+    """Chain-ladder mean times a learned correction, one network for every company:
+
+        mu(c, l, i, j) = mu_CL(c, l, i, j) * exp(w0 + <w, z2(z1(x))>),   z_m(u) = tanh(b_m + W_m u)
+
+    where c = company, l = line of business, i = accident year, j = development year;
+    mu_CL = the chain-ladder (ODP) mean of the cell, the offset; x = the embeddings of c, l
+    and j (`emb` numbers each) joined with the standardised accident year. w0 = 0 and w = 0
+    at the start, so training begins exactly at the chain-ladder."""
+
     def __init__(self, n_comp: int, n_lob: int, emb: int, hidden: list[int]):
         super().__init__()
         self.comp = nn.Embedding(n_comp, emb)
