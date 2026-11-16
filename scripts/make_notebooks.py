@@ -230,7 +230,7 @@ LESSONS = [
             (md, GAPS_MD.format(units="test policies")),
             (py, 'findings("frequency", models)'),
             (md, "## Open the box: GLM coefficients\nThe same `GLM` class the pipeline uses:"),
-            (py, 'glm = load("glm.freq_model")\nglm.result.summary().tables[1]'),
+            (py, 'glm = load("glm.freq_model")\nglm.coefficients'),
             (
                 md,
                 "## Diagnostics (test set)\nCalibration by decile, marginal fits and the GBM's"

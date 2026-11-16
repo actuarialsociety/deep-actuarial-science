@@ -85,7 +85,9 @@ def evaluate(model: FrequencyModel, pred: pd.DataFrame, params: dict):
     Merz (2023, eq. 5.28) and the papers benchmarked against; `deviance_exposure_*`
     divides by total exposure instead (the AI Tools notebooks). With several seeds,
     `deviance_*` is the mean over runs (with `_sd`), as in Brauer (2024), Table 2, and
-    `deviance_ensemble_*` scores the averaged prediction."""
+    `deviance_ensemble_*` scores the averaged prediction. `epochs` (with `_sd`) is the mean
+    over runs of the epoch with the lowest validation loss, counted from 1 as in Brauer
+    (2024), Table 1; `best_epoch` is the first run's, counted from 0 (the training figure)."""
     m = {}
     run_cols = [c for c in pred.columns if c.startswith("pred_run_")]
     for split in ("learn", "test"):
@@ -108,6 +110,9 @@ def evaluate(model: FrequencyModel, pred: pd.DataFrame, params: dict):
     m["fit_seconds"] = model.fit_seconds
     if model.history:
         m["best_epoch"] = model.history["best_epoch"]
+    if len(getattr(model, "histories", [])) > 1:
+        stopped = [h["best_epoch"] + 1 for h in model.histories]
+        m["epochs"], m["epochs_sd"] = float(np.mean(stopped)), float(np.std(stopped, ddof=1))
     log.info(
         "%s: deviance learn %.3f, test %.3f, gini %.3f",
         params["kind"],

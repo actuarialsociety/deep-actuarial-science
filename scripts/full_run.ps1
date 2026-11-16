@@ -1,8 +1,9 @@
 # PowerShell twin of full_run.sh: every model, dataset and benchmark, logged to W&B.
 #   scripts/full_run.ps1                      # reference pass (then freeze), then scale_up
 #   scripts/full_run.ps1 reference            # one pass
+#   $env:REF_PIPELINES = "frequency"; scripts/full_run.ps1 reference   # rerun one pipeline
 # Settings as environment variables: DAS_DEVICE (mps, cuda or cpu; default cuda on Windows),
-# REF_ENV, UP_ENV, WANDB_PROJECT, WANDB_RUN_GROUP, WANDB_MODE. Logs and a copy of every report
+# REF_ENV, UP_ENV, REF_PIPELINES, WANDB_PROJECT, WANDB_RUN_GROUP, WANDB_MODE. Logs and a copy of every report
 # go to data/09_full_run/<group>/.
 param([string[]]$Passes = @("reference", "scale_up"))
 $ErrorActionPreference = "Stop"
@@ -16,6 +17,7 @@ function Default([string]$name, [string]$value) {   # keep a variable the caller
 }
 Default DAS_DEVICE ($(if ($IsMacOS) { "mps" } else { "cuda" }))
 Default REF_ENV "local"; Default UP_ENV "scale_up"
+Default REF_PIPELINES "frequency mortality reserving"
 Default WANDB_PROJECT "deep-actuarial-science"
 Default WANDB_RUN_GROUP "full-$env:DAS_DEVICE-$(Get-Date -Format yyyyMMdd-HHmm)"
 $env:DO_NOT_TRACK = "1"; $env:MLFLOW_DISABLE_AGENT_HINT = "1"
@@ -48,7 +50,7 @@ function Save-Reports([string]$dest) {
 foreach ($pass in $Passes) {
     switch ($pass) {
         "reference" {
-            foreach ($p in "frequency", "mortality", "reserving") { Invoke-Pipeline $env:REF_ENV $p }
+            foreach ($p in -split $env:REF_PIPELINES) { Invoke-Pipeline $env:REF_ENV $p }
             Save-Reports "$out/reference"
             & $py -c @"
 import glob, sys

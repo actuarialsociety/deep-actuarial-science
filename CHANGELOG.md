@@ -9,6 +9,8 @@ Rules (enforced for pull requests by CI, see [MAINTENANCE.md](./MAINTENANCE.md))
 ## Unreleased
 
 ### Results
+- FNN and CANN now follow two settings found only in Brauer's public code: numeric inputs standardised as recorded (no caps, no log-density) and embeddings started at Normal(1, 0.05). Mean of 15 seeds: FNN learn 23.774 → 23.777, test 23.829 → 23.830 (PASS); CANN learn 23.787 → 23.778 (FAIL), test 23.818 → 23.830 (**PASS → FAIL**, 0.020 from the paper against a tolerance of 0.019). The changes are within seed noise: these settings do not explain the CANN gap.
+- New benchmarks from Brauer (2024), Table 1: number of weights (792, PASS for both) and best epoch (FNN 63 vs 73, PASS; CANN 53 vs 90, FAIL). Reference: 25 PASS, 4 FAIL (CANN learn, test and epochs; LSTM out of sample).
 - Homogeneous model: Gini 0.082 → 0.000. A constant prediction ranks nothing; the old value came from the order of the data (ties in the Lorenz curve).
 - Leaderboard figure: GLM1's published diamond was GLM3's value (24.102); it is now its own (24.146), and GLM3 has one.
 - CANN: learn deviance now **FAIL** (23.787 vs 23.742, tolerance 0.036): the `2se` tolerance is correct for two 15-seed means; the old 2 sd (0.122) hid it. Test deviance still PASS. Reference: 23 PASS, 2 FAIL (CANN learn, LSTM out of sample).
@@ -17,6 +19,9 @@ Rules (enforced for pull requests by CI, see [MAINTENANCE.md](./MAINTENANCE.md))
 - Frequency findings: with Holm adjustment, LocalGLMnet's 15-seed average vs FNN is no longer a real gap (adjusted p 0.15). No frequency metric moved.
 
 ### Added
+- `docs/paper_checklist.yml`: every benchmark paper's components (architecture, equations, hyperparameters, data handling) set against our code, 60 items: as in the paper, a deviation with its reason, or source silent. `pytest` fails when a quoted parameter or symbol changes (`checklist.py`); shown in the report, the slides and `docs/paper_checklist.md`.
+- Frequency parameters `preprocess` (`raw` or `capped`) and `embedding_init`; metric `epochs` (mean and sd of the best epoch over seeds).
+- `REF_PIPELINES=frequency scripts/full_run.sh reference` (and `.ps1`) reruns one pipeline of the reference run, then freezes.
 - `docs/`: an interactive plotly report (`index.html`: scorecard, each reproduction's distance from its paper, which gaps are real, mortality seeds vs the published run; details expand; model version, data, reproduce commands, links to MLflow, W&B, CI and the wiki) and its slide version (`slides.md`), built from `reference/` by `scripts/build_docs.py` and published to Pages.
 - Audit trail (`audit.py`, `AuditHook`): every pipeline step's duration, row counts and reconciled totals (claims, exposure, predictions, premium, paid, reserves) logged to MLflow (`audit.*` metrics, `audit/steps.csv`) and W&B.
 - Model version on every run: package version (one source, `pyproject.toml`, now 0.2.0) and git commit as MLflow tags, W&B config and in `reference/environment.json`.
@@ -36,6 +41,9 @@ Rules (enforced for pull requests by CI, see [MAINTENANCE.md](./MAINTENANCE.md))
 - `MAINTENANCE.md`, this changelog, and a CI check that a pull request updates it.
 
 ### Changed
+- Version 0.3.0.
+- Saved GLMs no longer carry their training data: 840 MB → about 50 kB per model (and the CANN that holds its GLM), so a run no longer adds 2.5 GB to `mlruns/`. The coefficient table is kept as `glm.coefficients` (the notebook shows it).
+- Lesson and README gap markers work in either order (`gap.fnn.cann` or `gap.cann.fnn`), so two near-equal models swapping places does not break the freeze.
 - Lesson scripts and the slide build read only the numbered decks (`lessons/NN *.md`), so `lessons/README.md` is not published as a lesson.
 - Git flow: feature branches off `develop` with conventional branch names and commits; CI also runs on pushes to `develop`. AGENTS.md §7 records the maintainer's working principles.
 - FNN and CANN are reconciled to Brauer (2024) with a tolerance of 2 standard errors of the gap between two 15-seed means (`2se`), not 2 seed sd, which was about 2.7 times too wide.

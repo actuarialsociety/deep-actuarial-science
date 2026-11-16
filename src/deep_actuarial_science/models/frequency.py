@@ -7,7 +7,10 @@ conf/base/parameters_benchmarks.yml):
 
 - GLM1 / GLM3: Wüthrich & Merz (2023), Sect. 5.2.4 and Table 5.5 (formulas in config)
 - FNN with embeddings and CANN: Brauer (2024), Table 2 (f) and (g): 15 seeds, nadam,
-  batch 7,000, early stopping with patience 15 on an own 10% validation split per seed
+  batch 7,000, early stopping with patience 15 on an own 10% validation split per seed.
+  Two details come from the paper's public code, not its text (`preprocess: raw`,
+  `embedding_init`): the seven numeric features are standardised as they are (no caps, no
+  log of Density), and the embeddings start at Normal(1, 0.05)
 - LocalGLMnet: Richman & Wüthrich (2023), Sect. 3: one-hot categoricals, standardised
   continuous features, RandU and RandN control variables (q = 42), layers (20, 15, 10)
 
@@ -99,22 +102,35 @@ NUMERIC = ["VehAge", "DrivAge", "BonusMalus", "VehPower"]
 CLIP_UPPER = [20, 90, 150, 15]
 
 
-def nn_preprocessor() -> ColumnTransformer:
-    """Capped and standardised continuous covariates (Wüthrich & Merz 2023, Sect. 7.3.2,
-    with a standard scaler as in Brauer 2024); VehBrand and Region as integer codes for
-    the embedding layers."""
-    return ColumnTransformer(
-        [
+def nn_preprocessor(preprocess: str = "capped") -> ColumnTransformer:
+    """Seven numeric inputs, then VehBrand and Region as integer codes for the embeddings.
+
+    - `"raw"` (Brauer 2024, public code, Sect. 2.6 of the notebook): Area as 1-6, VehPower,
+      VehAge, DrivAge, BonusMalus, VehGas (Diesel = 1) and Density, each centred and scaled
+      to unit variance exactly as recorded: no caps and no logarithm.
+    - `"capped"` (Wüthrich & Merz 2023, Sect. 7.3.2): VehAge, DrivAge, BonusMalus and
+      VehPower capped at 20, 90, 150 and 15, log(Density) rounded to 2 decimals, all
+      standardised; VehGas left as 0/1."""
+    area = ("area", Pipeline([("enc", OrdinalEncoder()), ("scale", StandardScaler())]), ["Area"])
+    gas = FunctionTransformer(_is_diesel, feature_names_out="one-to-one")
+    if preprocess == "raw":
+        numeric = [
+            area,
+            ("scale", StandardScaler(), [*NUMERIC, "Density"]),
+            ("veh_gas", Pipeline([("bin", gas), ("scale", StandardScaler())]), ["VehGas"]),
+        ]
+    elif preprocess == "capped":
+        log = Pipeline([("log", FunctionTransformer(_log_round)), ("scale", StandardScaler())])
+        numeric = [
             ("scale", _clip_scale(CLIP_UPPER), NUMERIC),
-            ("area", Pipeline([("enc", OrdinalEncoder()), ("scale", StandardScaler())]), ["Area"]),
-            (
-                "density",
-                Pipeline([("log", FunctionTransformer(_log_round)), ("scale", StandardScaler())]),
-                ["Density"],
-            ),
-            ("veh_gas", FunctionTransformer(_is_diesel), ["VehGas"]),
-            ("cats", OrdinalEncoder(), ["VehBrand", "Region"]),
-        ],
+            area,
+            ("density", log, ["Density"]),
+            ("veh_gas", gas, ["VehGas"]),
+        ]
+    else:
+        raise ValueError(f"preprocess must be 'raw' or 'capped', not {preprocess!r}")
+    return ColumnTransformer(
+        [*numeric, ("cats", OrdinalEncoder(), ["VehBrand", "Region"])],
         verbose_feature_names_out=False,
     )
 
@@ -220,6 +236,23 @@ class Homogeneous(FrequencyModel):
         return 1
 
 
+def _without_data(result):
+    """Drop the training data from a fitted statsmodels GLM, keeping what `predict` needs (the
+    coefficients and the formula's encoding). statsmodels keeps every row: about 840 MB per
+    saved model on the full data, copied again into MLflow by every run and into the CANN that
+    holds its GLM. Unpickling rebuilds the formula's encoding from the stored frame, so one
+    row per level of every categorical column is kept: the slimmed model is a few kB."""
+    result.remove_data()
+    data = result.model.data
+    levels = data.frame.select_dtypes(exclude="number")
+    keep = (~levels.apply(lambda col: col.duplicated())).any(axis=1).to_numpy().copy()
+    keep[0] = True  # never empty, also for a formula without categorical columns
+    for name in ("orig_exog", "orig_endog", "frame"):
+        setattr(data, name, getattr(data, name).loc[keep])
+    result.model.offset = None
+    return result
+
+
 class GLM(FrequencyModel):
     """Poisson GLM with log link and log-exposure offset (statsmodels formula)."""
 
@@ -228,9 +261,13 @@ class GLM(FrequencyModel):
     def _fit(self, learn, params, base):
         d = add_glm_features(learn)
         self.formula = params["formula"]
-        self.result = smf_glm(
+        result = smf_glm(
             self.formula, data=d, offset=np.log(d.Exposure), family=sm.families.Poisson()
         ).fit()
+        # estimate, standard error, z, p-value and 95% interval of every coefficient: taken
+        # now, because statsmodels cannot summarise a fit once its data is dropped
+        self.coefficients = result.summary2().tables[1]
+        self.result = _without_data(result)
 
     def predict(self, df):
         d = add_glm_features(df)
@@ -316,13 +353,28 @@ class GBM(FrequencyModel):
 class EmbeddingFNN(nn.Module):
     """Depth-d tanh FNN with entity embeddings for VehBrand and Region.
 
-    Output = exp(w0 + <w, z(x)>) * offset. With w = 0 at initialisation the
-    network starts at exp(w0) * offset: the homogeneous model (FNN) or the
-    GLM (CANN, w0 = 0 and offset = GLM expected counts).
+    Brauer (2024), Sect. 3.2 and eq. (3)-(4):
+
+        mu(x) = exp(w0 + <w, z3(z2(z1(x)))>) * offset,   z_m(u) = tanh(b_m + W_m u)
+
+    where x = the numeric inputs joined with one embedding vector per categorical feature;
+    offset = exposure v (FNN) or v * GLM prediction (CANN). With w = 0 at initialisation
+    the network starts at exp(w0) * offset: the homogeneous model (FNN, w0 = log of the
+    portfolio frequency) or the GLM itself (CANN, w0 = 0).
+
+    Weights start at Keras's defaults (Glorot-uniform kernels, zero biases). `emb_init`
+    = (mean, sd) starts the embeddings at a normal distribution instead of Keras's
+    uniform(-0.05, 0.05): Brauer's code uses (1.0, 0.05).
     """
 
     def __init__(
-        self, n_cont: int, n_levels: list[int], emb_dims: list[int], hidden: list[int], bias0: float
+        self,
+        n_cont: int,
+        n_levels: list[int],
+        emb_dims: list[int],
+        hidden: list[int],
+        bias0: float,
+        emb_init: list[float] | None = None,
     ):
         super().__init__()
         self.emb = nn.ModuleList(nn.Embedding(k, b) for k, b in zip(n_levels, emb_dims))
@@ -330,6 +382,9 @@ class EmbeddingFNN(nn.Module):
         self.hidden = nn.ModuleList(nn.Linear(a, b) for a, b in zip(sizes[:-1], sizes[1:]))
         self.out = nn.Linear(hidden[-1], 1)
         keras_init(self)  # Keras defaults, as in Brauer (2024); then the zero-output start
+        if emb_init:
+            for e in self.emb:
+                nn.init.normal_(e.weight, *emb_init)
         nn.init.zeros_(self.out.weight)
         nn.init.constant_(self.out.bias, bias0)
 
@@ -355,7 +410,7 @@ class FNN(FrequencyModel):
 
     def _fit(self, learn, params, base):
         self.base = base
-        self.pre = nn_preprocessor().fit(learn)
+        self.pre = nn_preprocessor(params.get("preprocess", "capped")).fit(learn)
         n_levels = [learn.VehBrand.nunique(), learn.Region.nunique()]
         bias0 = 0.0 if self.uses_base else float(np.log(learn.ClaimNb.sum() / learn.Exposure.sum()))
         seed0 = params.get("seed", 21456783)
@@ -369,6 +424,7 @@ class FNN(FrequencyModel):
                 params.get("embedding_dims", [2, 2]),
                 params.get("hidden", [20, 15, 10]),
                 bias0,
+                params.get("embedding_init"),
             )
             hist = train_poisson(
                 net, self._tensors(train), self._tensors(val), **_train_args(params)

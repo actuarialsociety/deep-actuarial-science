@@ -42,12 +42,18 @@ frequency:
     # Brauer (2024), Sect. 4 and Table 2 (f): FNN_EMB, 15 seeds, each with its own 10%
     # validation split; nadam (Keras default learning rate 0.001), batch 7,000, up to 500
     # epochs, early stopping with patience 15; zero-initialised output weights.
+    # From the paper's code (github.com/BrauerAlexej, notebook Sect. 2.6 and 3.4): numeric
+    # features standardised as recorded (`preprocess: raw`; `capped` = the caps and
+    # log-density of Wüthrich & Merz 2023, Sect. 7.3.2) and embeddings started at
+    # Normal(mean 1, sd 0.05) (`embedding_init`; omit for Keras's uniform ±0.05).
     fnn:
       kind: fnn
       seed: 21456783
       n_runs: 15
       hidden: [20, 15, 10]
       embedding_dims: [2, 2]
+      embedding_init: [1.0, 0.05]
+      preprocess: raw
       epochs: 500
       batch_size: 7000
       patience: 15
@@ -62,6 +68,8 @@ frequency:
       n_runs: 15
       hidden: [20, 15, 10]
       embedding_dims: [2, 2]
+      embedding_init: [1.0, 0.05]
+      preprocess: raw
       epochs: 500
       batch_size: 7000
       patience: 15
